@@ -271,6 +271,11 @@
     }
     
     id<NFCTag> tag = [tags firstObject];
+    id<NFCMiFareTag> mifareTag = [tag asNFCMiFareTag];
+    const char bytes[] = {0x1B,0x31,0x32,0x32,0x36};
+    NSData *data = [NSData dataWithBytes:bytes length:sizeof(bytes)];
+    NSData *output = nil;
+    
     NSMutableDictionary *tagMetaData = [self getTagInfo:tag];
     id<NFCNDEFTag> ndefTag = (id<NFCNDEFTag>)tag;
     
@@ -280,8 +285,34 @@
             [self closeSession:session withError:@"Error connecting to tag."];
             return;
         }
-
-        [self processNDEFTag:session tag:ndefTag metaData:tagMetaData];
+        
+        [mifareTag sendMiFareCommand:data
+        completionHandler:^(NSData *response, NSError *error) {
+            if (error) {
+                NSLog(@"%@", error);
+                [self closeSession:session withError:@"Error connecting to tag."];
+            } else {
+                //NSLog(response);
+                char bytesRead[] = {0x30,0x04};
+                NSData *dataRead = [NSData dataWithBytes:bytesRead length:sizeof(bytesRead)];
+                [mifareTag sendMiFareCommand:dataRead
+                completionHandler:^(NSData *response, NSError *error) {
+                    if (error) {
+                        NSLog(@"%@", error);
+                        [self closeSession:session withError:@"Error connecting to tag."];
+                    } else {
+                        
+                        NSLog(@"%@", response);
+                        
+                        session.alertMessage = @"Tag successfully read.";
+                        NSDictionary *dict = @{ @"id" : response};
+                        [self fireNdefEvent:nil metaData:dict];
+                        [self closeSession:session];
+                    }
+                }];
+            }
+        }];
+        
     }];
 }
 
